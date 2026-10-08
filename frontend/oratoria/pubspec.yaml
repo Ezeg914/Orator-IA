@@ -50,6 +50,7 @@ dependencies:
   image: ^3.0.3
   fl_chart: ^0.68.0
   http: ^0.13.6
+  flutter_secure_storage: ^9.2.4
 
 
 
