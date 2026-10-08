@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class VideoDetailScreen extends StatelessWidget {
+  // Las mismas emociones que devuelve el detector del backend
+  static const List<String> allEmotions = ['Angry', 'Disgusted', 'Fearful', 'Happy', 'Neutral', 'Sad', 'Surprised'];
+
   final String title;
   final List<String> emotions;
 
@@ -25,7 +28,7 @@ class VideoDetailScreen extends StatelessWidget {
 
   // Función para calcular el porcentaje de cada emoción
   Map<String, double> _calculateEmotionPercentages(Map<String, int> emotionCounts) {
-    int totalEmotions = emotionCounts.values.reduce((a, b) => a + b);
+    int totalEmotions = emotionCounts.values.fold(0, (a, b) => a + b);
     Map<String, double> emotionPercentages = {};
 
     emotionCounts.forEach((emotion, count) {
@@ -42,9 +45,10 @@ class VideoDetailScreen extends StatelessWidget {
     final List<MapEntry<String, double>> sortedEmotions = emotionPercentages.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    // Convertir las emociones y sus valores en listas separadas
-    List<String> emotionLabels = sortedEmotions.map((e) => e.key).toList();
-    List<double> emotionValues = sortedEmotions.map((e) => e.value).toList();
+    // El radar siempre usa las 7 emociones como ejes (0 si no apareció):
+    // fl_chart necesita al menos 3 y un video puede tener solo una o dos
+    List<String> emotionLabels = allEmotions;
+    List<double> emotionValues = allEmotions.map((e) => emotionPercentages[e] ?? 0.0).toList();
 
     // Calcular el valor máximo de las emociones
     double maxEmotionValue = emotionValues.isNotEmpty ? emotionValues.reduce((a, b) => a > b ? a : b) : 100.0;
@@ -74,11 +78,18 @@ class VideoDetailScreen extends StatelessWidget {
           Container(
             height: 300,
             margin: const EdgeInsets.all(16.0),
-            child: AnimatedRadarChart(
-              emotionLabels: emotionLabels,
-              emotionValues: emotionValues,
-              maxEmotionValue: maxEmotionValue,
-            ),
+            child: emotions.isEmpty
+                ? Center(
+                    child: Text(
+                      'No emotions detected in this video',
+                      style: TextStyle(fontSize: 16, color: Colors.black54),
+                    ),
+                  )
+                : AnimatedRadarChart(
+                    emotionLabels: emotionLabels,
+                    emotionValues: emotionValues,
+                    maxEmotionValue: maxEmotionValue,
+                  ),
           ),
           // Fondo del detalle
           Expanded(

@@ -1,4 +1,4 @@
-from main.models.userModels import User
+from main.models.userModels import User, UserUpdate
 from sqlmodel import Session, select
 
 class UserRepository:
@@ -15,16 +15,23 @@ class UserRepository:
         return users
 
     @staticmethod
-    def read_user(user_id: str, session: Session):
+    def read_user(user_id: int, session: Session):
         user = session.get(User, user_id)
         return user
 
     @staticmethod
-    def update_user(user_id: str, user: User, session: Session):
+    def read_user_by_email(email: str, session: Session):
+        user = session.exec(select(User).where(User.email == email)).first()
+        return user
+
+    @staticmethod
+    def update_user(user_id: int, user: UserUpdate, session: Session):
         user_db = session.get(User, user_id)
         if user_db:
-            user_db.name = user.name
-            user_db.email = user.email
+            if user.username is not None:
+                user_db.username = user.username
+            if user.email is not None:
+                user_db.email = user.email
             session.add(user_db)
             session.commit()
             session.refresh(user_db)
@@ -32,7 +39,7 @@ class UserRepository:
         return None
 
     @staticmethod
-    def delete_user(user_id: str, session: Session):
+    def delete_user(user_id: int, session: Session):
         user = session.get(User, user_id)
         if user:
             session.delete(user)
