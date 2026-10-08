@@ -14,6 +14,10 @@ class VideoController:
         return VideoRepository.read_videos(session)
 
     @staticmethod
+    def read_videos_by_user(user_id: int, session: Session):
+        return VideoRepository.read_videos_by_user(user_id, session)
+
+    @staticmethod
     def read_video(video_id: int, session: Session):
         video = VideoRepository.read_video(video_id, session)
         if video:

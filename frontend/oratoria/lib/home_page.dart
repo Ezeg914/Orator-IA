@@ -7,6 +7,8 @@ import 'dart:typed_data';
 import 'package:oratoria/screens/video_detail_screen.dart';
 import 'package:oratoria/screens/video_player_screen.dart';
 import 'package:oratoria/screens/video_screen.dart';
+import 'package:oratoria/screens/login_screen.dart';
+import 'package:oratoria/services/auth_service.dart';
 import 'package:camera/camera.dart';
 
 List<CameraDescription> cameras = [];
@@ -27,8 +29,32 @@ class _HomePageState extends State<HomePage> {
     fetchVideos();
   }
 
+  Future<void> _logout() async {
+    await AuthService.logout();
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   Future<void> fetchVideos() async {
-    final response = await http.get(Uri.parse('http://192.168.1.42:5000/api/videos/'));
+    final response = await http.get(
+      Uri.parse('$apiBaseUrl/videos/'),
+      headers: AuthService.authHeaders,
+    );
+
+    if (response.statusCode == 401) {
+      // Sesión vencida o inválida: volver al login
+      await _logout();
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
 
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(response.body);
@@ -40,13 +66,109 @@ class _HomePageState extends State<HomePage> {
             'id': item['id'],
             'title': item['title'],
             'emotions': emotionList.cast<String>(),
-            'video_data': base64Decode(item['video_data']),
-            'path': item['path'],
           };
         }).toList();
       });
     } else {
       throw Exception('Failed to load videos');
+    }
+  }
+
+  // El listado no trae el video (es pesado): se descarga recién al reproducirlo
+  Future<void> _playVideo(int videoId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    Uint8List? videoData;
+    try {
+      final response = await http.get(
+        Uri.parse('$apiBaseUrl/videos/$videoId'),
+        headers: AuthService.authHeaders,
+      );
+      if (response.statusCode == 200) {
+        videoData = base64Decode(json.decode(response.body)['video_data']);
+      } else {
+        print('Failed to load video: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error loading video: $e');
+    }
+
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pop(); // Close loading dialog
+
+    if (videoData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load the video')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      _createRoute(VideoPlayerScreen(videoData: videoData)),
+    );
+  }
+
+  Future<void> _deleteVideo(int videoId, String title) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete video'),
+          content: Text('Delete "$title"? This cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+              child: Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    int? statusCode;
+    try {
+      final response = await http.delete(
+        Uri.parse('$apiBaseUrl/videos/$videoId'),
+        headers: AuthService.authHeaders,
+      );
+      statusCode = response.statusCode;
+    } catch (e) {
+      print('Error deleting video: $e');
+    }
+
+    if (statusCode == 401) {
+      await _logout();
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    // 404: ya no existe en el servidor, también se saca de la lista
+    if (statusCode == 200 || statusCode == 404) {
+      setState(() {
+        videosData.removeWhere((video) => video['id'] == videoId);
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete the video')),
+      );
     }
   }
 
@@ -73,6 +195,27 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
+            ),
+          ),
+          Positioned(
+            top: 36,
+            right: 10,
+            child: Row(
+              children: [
+                Text(
+                  AuthService.username,
+                  style: TextStyle(
+                    color: Color(0xFF5A04AC),
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.logout, color: Color(0xFF5A04AC)),
+                  tooltip: 'Log out',
+                  onPressed: _logout,
+                ),
+              ],
             ),
           ),
           Positioned.fill(
@@ -115,7 +258,12 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   Expanded(
-                    child: ListView.builder(
+                    // Deslizar hacia abajo para recargar la galería
+                    child: RefreshIndicator(
+                      onRefresh: fetchVideos,
+                      color: Color(0xFF5A04AC),
+                      child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(20),
                       itemCount: videosData.length,
                       itemBuilder: (context, index) {
@@ -137,17 +285,14 @@ class _HomePageState extends State<HomePage> {
                           child: VideoThumbnail(
                             title: video['title'],
                             emotions: video['emotions'],
-                            videoData: video['video_data'] ?? Uint8List(0),
-                            path: video['path'] ?? '',
-                            onPlay: () {
-                              Navigator.push(
-                                context,
-                                _createRoute(VideoPlayerScreen(videoData: video['video_data'])),
-                              );
-                            },
+                            videoData: Uint8List(0),
+                            path: 'video-${video['id']}', // Tag único del Hero por video
+                            onPlay: () => _playVideo(video['id']),
+                            onDelete: () => _deleteVideo(video['id'], video['title']),
                           ),
                         );
                       },
+                      ),
                     ),
                   ),
                 ],
@@ -160,7 +305,8 @@ class _HomePageState extends State<HomePage> {
         onPressed: () {
           Navigator.push(
             context,
-            _createRoute(VideoScreen(cameras)),
+            // Recargar la galería apenas el servidor termina de analizar el video
+            _createRoute(VideoScreen(cameras, onUploaded: fetchVideos)),
           );
         },
         child: const Icon(Icons.camera_alt),
@@ -191,6 +337,7 @@ class VideoThumbnail extends StatelessWidget {
   final Uint8List videoData;
   final String path;
   final VoidCallback onPlay;
+  final VoidCallback onDelete;
 
   const VideoThumbnail({
     Key? key,
@@ -199,7 +346,22 @@ class VideoThumbnail extends StatelessWidget {
     required this.videoData,
     required this.path,
     required this.onPlay,
+    required this.onDelete,
   }) : super(key: key);
+
+  // Texto del chip: la emoción que más aparece y su porcentaje
+  String get _summary {
+    if (emotions.isEmpty) {
+      return 'No emotions detected';
+    }
+    final Map<String, int> counts = {};
+    for (var emotion in emotions) {
+      counts[emotion] = (counts[emotion] ?? 0) + 1;
+    }
+    final top = counts.entries.reduce((a, b) => b.value > a.value ? b : a);
+    final percentage = (top.value / emotions.length * 100).round();
+    return 'Mostly ${top.key} · $percentage%';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -220,58 +382,134 @@ class VideoThumbnail extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 100,
-                height: 180,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
-                  image: DecorationImage(
-                    image: AssetImage('assets/123.jpg'),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          clipBehavior: Clip.antiAlias,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Miniatura con el botón de play encima
+                SizedBox(
+                  width: 105,
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF5A04AC),
+                      Image.asset('assets/123.jpg', fit: BoxFit.cover),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0xFF5A04AC).withOpacity(0.55),
+                              Color(0xFF9C6AFA).withOpacity(0.15),
+                            ],
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                          ),
                         ),
                       ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            _createRoute(VideoDetailScreen(
-                              title: title,
-                              emotions: emotions,
-                            )),
-                          );
-                        },
-                        child: Text('View Details'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color.fromARGB(255, 255, 255, 255),
+                      Center(
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.92),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black26,
+                                offset: Offset(0, 2),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: Icon(Icons.play_arrow_rounded, color: Color(0xFF5A04AC), size: 32),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              IconButton(
-                icon: Icon(Icons.play_arrow, color: Color(0xFF5A04AC)),
-                onPressed: onPlay,
-              ),
-            ],
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 6, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF5A04AC),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Emoción predominante del video
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF9C6AFA).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.insights_rounded, size: 15, color: Color(0xFF5A04AC)),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  _summary,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF5A04AC),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    _createRoute(VideoDetailScreen(
+                                      title: title,
+                                      emotions: emotions,
+                                    )),
+                                  );
+                                },
+                                icon: Icon(Icons.bar_chart_rounded, size: 18),
+                                label: Text('View Details'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Color(0xFF5A04AC),
+                                  foregroundColor: Colors.white,
+                                  elevation: 2,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.delete_outline_rounded, color: Color(0xFF9C6AFA)),
+                              tooltip: 'Delete',
+                              onPressed: onDelete,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

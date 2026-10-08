@@ -7,11 +7,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:http_parser/http_parser.dart';
+import 'package:oratoria/services/auth_service.dart';
 
 class VideoScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
+  // Se llama cuando el servidor terminó de analizar y guardar el video
+  final VoidCallback? onUploaded;
 
-  VideoScreen(this.cameras);
+  VideoScreen(this.cameras, {this.onUploaded});
 
   @override
   State<VideoScreen> createState() => _PhotoScreenState();
@@ -126,9 +129,9 @@ class _PhotoScreenState extends State<VideoScreen> {
   }
 
   Future<void> _uploadVideoToServer(String videoPath, String title) async {
-  final Uri url = Uri.parse('http://192.168.1.42:5000/api/videos/?title=$title');
+  final Uri url = Uri.parse('$apiBaseUrl/videos/?title=$title');
   final request = http.MultipartRequest('POST', url)
-    ..headers.addAll({'Accept': 'application/json'});
+    ..headers.addAll({'Accept': 'application/json', ...AuthService.authHeaders});
 
   final file = await http.MultipartFile.fromPath('file', videoPath, contentType: MediaType('video', 'mp4'));
   request.files.add(file);
@@ -140,15 +143,19 @@ class _PhotoScreenState extends State<VideoScreen> {
 
     if (response.statusCode == 200) {
       print('Video uploaded successfully: $responseString');
+      widget.onUploaded?.call(); // Avisar a la galería aunque ya se haya salido de esta pantalla
+      if (!mounted) return;
       Navigator.pop(context); // Close dialog
     } else {
       print('Failed to upload video: ${response.statusCode}');
       print('Error details: $responseString');
+      if (!mounted) return;
       Navigator.pop(context); // Close dialog
       _showErrorDialog('Failed to upload video: ${response.statusCode}');
     }
   } catch (e) {
     print('Error uploading video: $e');
+    if (!mounted) return;
     Navigator.pop(context); // Close dialog
     _showErrorDialog('Error uploading video: $e');
   }
