@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" width="360" height="220" role="img" aria-labelledby="t">
+  <title id="t">Orator-IA</title>
+  <defs>
+    <style>
+      .sans { font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; }
+    </style>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#121C33"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="frame"><rect width="360" height="220" rx="16"/></clipPath>
+    <clipPath id="cam"><rect width="100" height="100" rx="12"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="360" height="220" fill="url(#bg)"/>
+    <circle cx="262" cy="80" r="130" fill="url(#glow)"/>
+  </g>
+  <rect x="0.75" y="0.75" width="358.5" height="218.5" rx="15.5" fill="none" stroke="#24314F" stroke-width="1.5"/>
+
+  <!-- Cuadro de video con rostro detectado -->
+  <g transform="translate(40 28)">
+    <rect width="100" height="100" rx="12" fill="#16213A" stroke="#2A3857" stroke-width="1.5"/>
+    <g clip-path="url(#cam)">
+      <circle cx="50" cy="44" r="18" fill="#2D3D62"/>
+      <path d="M14 100 Q14 70 50 70 Q86 70 86 100 Z" fill="#2D3D62"/>
+    </g>
+    <line x1="29" x2="71" y1="24" y2="24" stroke="#22D3EE" stroke-width="1.8" stroke-linecap="round" opacity="0.75">
+      <animate attributeName="y1" dur="2.6s" repeatCount="indefinite" values="24;64;24" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" keyTimes="0;0.5;1"/>
+      <animate attributeName="y2" dur="2.6s" repeatCount="indefinite" values="24;64;24" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" keyTimes="0;0.5;1"/>
+    </line>
+    <path d="M26 32 V20 H38 M62 20 H74 V32 M74 56 V68 H62 M38 68 H26 V56" fill="none" stroke="#22D3EE" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Flujo -->
+  <line x1="152" y1="78" x2="200" y2="78" stroke="#3A4A6D" stroke-width="2" stroke-dasharray="3 6" stroke-linecap="round"/>
+  <circle cy="78" r="3.5" fill="#22D3EE">
+    <animate attributeName="cx" dur="1.6s" repeatCount="indefinite" values="152;200"/>
+    <animate attributeName="opacity" dur="1.6s" repeatCount="indefinite" values="0;1;1;0" keyTimes="0;0.15;0.85;1"/>
+  </circle>
+
+  <!-- Radar -->
+  <g transform="translate(262 80)">
+    <polygon points="0,-50 39.1,-31.2 48.7,11.1 21.7,45 -21.7,45 -48.7,11.1 -39.1,-31.2" fill="#0E1628" fill-opacity="0.6" stroke="#2A3857" stroke-width="1.4"/>
+    <polygon points="0,-25 19.5,-15.6 24.4,5.6 10.8,22.5 -10.8,22.5 -24.4,5.6 -19.5,-15.6" fill="none" stroke="#24314F" stroke-width="1.2"/>
+    <g stroke="#24314F" stroke-width="1.2">
+      <line x2="0" y2="-50"/><line x2="39.1" y2="-31.2"/><line x2="48.7" y2="11.1"/><line x2="21.7" y2="45"/>
+      <line x2="-21.7" y2="45"/><line x2="-48.7" y2="11.1"/><line x2="-39.1" y2="-31.2"/>
+    </g>
+    <polygon fill="#22D3EE" fill-opacity="0.26" stroke="#22D3EE" stroke-width="2.2" stroke-linejoin="round"
+      points="0,-45 19.5,-15.6 34.1,7.8 7.6,15.8 -13,27 -19.5,4.5 -29.3,-23.4">
+      <animate attributeName="points" dur="7s" repeatCount="indefinite" calcMode="spline"
+        keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"
+        values="0,-45 19.5,-15.6 34.1,7.8 7.6,15.8 -13,27 -19.5,4.5 -29.3,-23.4;
+                0,-27.5 33.2,-26.5 19.5,4.5 15.2,31.5 -7.6,15.8 -39,8.9 -19.5,-15.6;
+                0,-45 19.5,-15.6 34.1,7.8 7.6,15.8 -13,27 -19.5,4.5 -29.3,-23.4"/>
+    </polygon>
+  </g>
+
+  <rect x="24" y="152" width="30" height="4" rx="2" fill="#22D3EE"/>
+  <text class="sans" x="23" y="192" font-size="30" font-weight="700" fill="#E6EDF7">Orator-IA</text>
+</svg>
